@@ -1,6 +1,6 @@
 # Khmer POS - Restaurant Management System
 
-Full-featured POS system for Khmer Surin Restaurant. Built with React 19 + Firebase.
+Full-featured POS system for Khmer Surin Restaurant. Built with React 19 + Supabase.
 
 ## Features
 
@@ -12,26 +12,26 @@ Full-featured POS system for Khmer Surin Restaurant. Built with React 19 + Fireb
 - **Menu Management** — CRUD with image upload, availability toggle, categories
 - **Staff Management** — 4 roles (Cashier, Waiter, Kitchen, Manager) with permissions
 - **Sales Reports** — Revenue, top items, payment breakdown, hourly charts
-- **Offline Support** — Firestore IndexedDB persistence for reliability
+- **Offline Support** — Supabase real-time subscriptions for reliability
 - **Bilingual** — English + Khmer font support
 
 ## Tech Stack
 
 - React 19 + Vite 8 + Tailwind CSS 4
-- Firebase (Firestore, Auth, Storage)
+- Supabase (PostgreSQL, Auth, Storage, Realtime)
 - React Router, Recharts, react-to-print, lucide-react
 
 ## Quick Start
 
 ```bash
 npm install
-cp .env.example .env    # Fill in your Firebase credentials
+cp .env.example .env    # Fill in your Supabase credentials
 npm run dev
 ```
 
 ## Setup Guide
 
-See [SETUP.md](SETUP.md) for detailed Firebase setup, seeding, and deployment instructions.
+See [SETUP.md](SETUP.md) for detailed Supabase setup, seeding, and deployment instructions.
 
 ## Staff Roles
 

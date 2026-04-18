@@ -25,7 +25,7 @@ export default function OrderList() {
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
@@ -85,17 +85,17 @@ export default function OrderList() {
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-900">#{order.orderNumber || order.id?.slice(0, 6)}</span>
+                    <span className="font-bold text-gray-900">#{order.order_number || order.id?.slice(0, 6)}</span>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 ${status.color}`}>
                       <StatusIcon className="w-3 h-3" />
                       {status.label}
                     </span>
                   </div>
-                  <span className="text-sm text-gray-500">{formatTime(order.createdAt)}</span>
+                  <span className="text-sm text-gray-500">{formatTime(order.created_at)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-500">
-                    {order.tableId === 'takeaway' ? '🛍️ Takeaway' : `🪑 Table ${order.tableNumber}`}
+                    {order.table_id === 'takeaway' ? '🛍️ Takeaway' : `🪑 Table ${order.table_number}`}
                     {' · '}{order.items?.length || 0} items
                   </span>
                   <span className="font-bold text-purple-600">${order.total?.toFixed(2)}</span>

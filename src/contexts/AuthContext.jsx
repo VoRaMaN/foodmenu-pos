@@ -1,11 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { auth, db } from '../firebase';
-import {
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-} from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { supabase } from '../supabase';
 
 const AuthContext = createContext(null);
 
@@ -21,33 +15,59 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        try {
-          const staffDoc = await getDoc(doc(db, 'staff', firebaseUser.uid));
-          if (staffDoc.exists() && staffDoc.data().active !== false) {
-            setStaffProfile({ id: staffDoc.id, ...staffDoc.data() });
-          } else {
-            // No staff document or account disabled — deny access
-            setStaffProfile(null);
-            await signOut(auth);
-          }
-        } catch {
-          setStaffProfile(null);
-          await signOut(auth);
-        }
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        fetchStaffProfile(session.user.id);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        await fetchStaffProfile(session.user.id);
       } else {
         setUser(null);
         setStaffProfile(null);
       }
       setLoading(false);
     });
-    return unsub;
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = (email, password) => signInWithEmailAndPassword(auth, email, password);
-  const logout = () => signOut(auth);
+  const fetchStaffProfile = async (uid) => {
+    try {
+      const { data, error } = await supabase
+        .from('staff')
+        .select('*')
+        .eq('id', uid)
+        .eq('active', true)
+        .single();
+
+      if (error || !data) {
+        setStaffProfile(null);
+        await supabase.auth.signOut();
+      } else {
+        setStaffProfile(data);
+      }
+    } catch {
+      setStaffProfile(null);
+      await supabase.auth.signOut();
+    }
+  };
+
+  const login = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data;
+  };
+
+  const logout = () => supabase.auth.signOut();
 
   const role = staffProfile?.role || null;
   const hasRole = (...roles) => roles.includes(role);

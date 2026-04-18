@@ -29,8 +29,8 @@ export default function KDS() {
   ];
 
   const getElapsedMinutes = (order) => {
-    if (!order.createdAt) return 0;
-    const created = order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+    if (!order.created_at) return 0;
+    const created = new Date(order.created_at);
     return Math.floor((Date.now() - created.getTime()) / 60000);
   };
 
@@ -42,7 +42,7 @@ export default function KDS() {
 
   const handleAdvance = async (orderId, nextStatus) => {
     try {
-      await updateOrderStatus(orderId, nextStatus, user.uid);
+      await updateOrderStatus(orderId, nextStatus, user.id);
     } catch (err) {
       console.error('Failed to update:', err);
     }
@@ -87,7 +87,7 @@ export default function KDS() {
                       >
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-bold text-gray-900">
-                            #{order.orderNumber || order.id?.slice(0, 6)}
+                            #{order.order_number || order.id?.slice(0, 6)}
                           </span>
                           <div className={`flex items-center gap-1 text-sm font-medium ${getTimeColor(elapsed)}`}>
                             <Clock className="w-3.5 h-3.5" />
@@ -96,7 +96,7 @@ export default function KDS() {
                         </div>
 
                         <p className="text-xs text-gray-500 mb-2">
-                          {order.tableId === 'takeaway' ? '🛍️ Takeaway' : `🪑 Table ${order.tableNumber}`}
+                          {order.table_id === 'takeaway' ? '🛍️ Takeaway' : `🪑 Table ${order.table_number}`}
                         </p>
 
                         <div className="space-y-1.5 mb-3">

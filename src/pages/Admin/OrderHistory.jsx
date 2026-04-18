@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../../firebase';
-import { collection, query, orderBy, getDocs, where } from 'firebase/firestore';
+import { supabase } from '../../supabase';
 import { Search, Filter } from 'lucide-react';
 
 const statusColors = {
@@ -24,14 +23,13 @@ export default function OrderHistory() {
     const fetchOrders = async () => {
       setLoading(true);
       try {
-        let q;
+        let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
         if (statusFilter !== 'all') {
-          q = query(collection(db, 'orders'), where('status', '==', statusFilter), orderBy('createdAt', 'desc'));
-        } else {
-          q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+          query = query.eq('status', statusFilter);
         }
-        const snap = await getDocs(q);
-        setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        const { data, error } = await query;
+        if (error) throw error;
+        setOrders(data || []);
       } catch (err) {
         console.error('Failed to fetch:', err);
       } finally {
@@ -43,7 +41,7 @@ export default function OrderHistory() {
 
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const date = new Date(timestamp);
     return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
@@ -90,11 +88,11 @@ export default function OrderHistory() {
                   className="hover:bg-gray-50 cursor-pointer"
                 >
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    #{order.orderNumber || order.id?.slice(0, 6)}
+                    #{order.order_number || order.id?.slice(0, 6)}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{formatDate(order.createdAt)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-500">{formatDate(order.created_at)}</td>
                   <td className="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">
-                    {order.tableId === 'takeaway' ? 'Takeaway' : `Table ${order.tableNumber}`}
+                    {order.table_id === 'takeaway' ? 'Takeaway' : `Table ${order.table_number}`}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${statusColors[order.status]}`}>
@@ -102,7 +100,7 @@ export default function OrderHistory() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-500 capitalize hidden sm:table-cell">
-                    {order.paymentMethod || '-'}
+                    {order.payment_method || '-'}
                   </td>
                   <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
                     ${order.total?.toFixed(2)}

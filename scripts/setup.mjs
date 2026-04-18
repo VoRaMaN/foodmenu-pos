@@ -4,16 +4,14 @@
  * Run: node scripts/setup.mjs
  * 
  * This script:
- *   1. Prompts for Firebase config → creates .env
- *   2. Prompts for manager email/password → creates Firebase Auth user + staff doc
+ *   1. Prompts for Supabase config → creates .env
+ *   2. Prompts for manager email/password → creates user + staff record
  *   3. Seeds menu items, tables, and settings
  */
 
 import { createInterface } from 'readline';
-import { writeFileSync, existsSync } from 'fs';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDocs, collection } from 'firebase/firestore';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { writeFileSync, existsSync, readFileSync } from 'fs';
+import { createClient } from '@supabase/supabase-js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -26,172 +24,166 @@ const ask = (q) => new Promise((resolve) => rl.question(q, resolve));
 async function main() {
   console.log('\n🚀 Khmer POS — Interactive Setup\n');
   console.log('Before running this script, you need to:');
-  console.log('  1. Create a Firebase project at https://console.firebase.google.com');
-  console.log('  2. Enable Email/Password Authentication');
-  console.log('  3. Create a Firestore Database (production mode)');
-  console.log('  4. Enable Storage (production mode)');
-  console.log('  5. Add a Web app and copy the config values\n');
+  console.log('  1. Create a Supabase project at https://supabase.com');
+  console.log('  2. Go to Project Settings → API to get your URL and anon key');
+  console.log('  3. Run the SQL from supabase/schema.sql in the SQL Editor\n');
 
-  // Step 1: Firebase config
-  console.log('━━━ Step 1: Firebase Configuration ━━━\n');
+  // Step 1: Supabase config
+  console.log('━━━ Step 1: Supabase Configuration ━━━\n');
 
-  let config = {};
+  let supabaseUrl, supabaseAnonKey;
+
   if (existsSync(envPath)) {
     const useExisting = await ask('.env file already exists. Use it? (y/n): ');
     if (useExisting.toLowerCase() === 'y') {
-      const { config: dotenv } = await import('dotenv');
-      dotenv({ path: envPath });
-      config = {
-        apiKey: process.env.VITE_FIREBASE_API_KEY,
-        authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
-        projectId: process.env.VITE_FIREBASE_PROJECT_ID,
-        storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.VITE_FIREBASE_APP_ID,
-      };
-      console.log(`   Using project: ${config.projectId}\n`);
+      const envContent = readFileSync(envPath, 'utf-8');
+      const urlMatch = envContent.match(/VITE_SUPABASE_URL=(.+)/);
+      const keyMatch = envContent.match(/VITE_SUPABASE_ANON_KEY=(.+)/);
+      supabaseUrl = urlMatch?.[1]?.trim();
+      supabaseAnonKey = keyMatch?.[1]?.trim();
+      console.log('  ✅ Using existing .env\n');
     }
   }
 
-  if (!config.projectId) {
-    console.log('Enter your Firebase config values:\n');
-    config.apiKey = await ask('  API Key: ');
-    config.authDomain = await ask('  Auth Domain (e.g. myapp.firebaseapp.com): ');
-    config.projectId = await ask('  Project ID: ');
-    config.storageBucket = await ask('  Storage Bucket (e.g. myapp.appspot.com): ');
-    config.messagingSenderId = await ask('  Messaging Sender ID: ');
-    config.appId = await ask('  App ID: ');
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.log('Enter your Supabase credentials (from Project Settings → API):\n');
+    supabaseUrl = await ask('  Supabase URL: ');
+    supabaseAnonKey = await ask('  Supabase Anon Key: ');
 
-    if (!config.projectId || !config.apiKey) {
-      console.error('\n❌ API Key and Project ID are required.');
-      process.exit(1);
-    }
-
-    // Write .env
-    const envContent = `VITE_FIREBASE_API_KEY=${config.apiKey}
-VITE_FIREBASE_AUTH_DOMAIN=${config.authDomain}
-VITE_FIREBASE_PROJECT_ID=${config.projectId}
-VITE_FIREBASE_STORAGE_BUCKET=${config.storageBucket}
-VITE_FIREBASE_MESSAGING_SENDER_ID=${config.messagingSenderId}
-VITE_FIREBASE_APP_ID=${config.appId}
+    const envContent = `# Supabase Configuration
+VITE_SUPABASE_URL=${supabaseUrl.trim()}
+VITE_SUPABASE_ANON_KEY=${supabaseAnonKey.trim()}
 `;
     writeFileSync(envPath, envContent);
-    console.log('\n   ✅ .env file created\n');
+    console.log('\n  ✅ .env file created\n');
   }
 
-  // Initialize Firebase
-  const app = initializeApp(config);
-  const db = getFirestore(app);
-  const authInstance = getAuth(app);
+  // Validate connection
+  const supabase = createClient(supabaseUrl.trim(), supabaseAnonKey.trim());
+
+  console.log('  Testing connection...');
+  const { error: pingError } = await supabase.from('settings').select('id').limit(1);
+  if (pingError && !pingError.message.includes('does not exist')) {
+    // Table might not exist yet, that's ok. Only fail on actual connection errors.
+    if (pingError.message.includes('fetch') || pingError.message.includes('network')) {
+      console.error('  ❌ Connection failed:', pingError.message);
+      console.error('  Check your Supabase URL and anon key.');
+      rl.close();
+      process.exit(1);
+    }
+  }
+  console.log('  ✅ Connected to Supabase\n');
 
   // Step 2: Manager account
   console.log('━━━ Step 2: Manager Account ━━━\n');
+  const email = await ask('  Manager email: ');
+  const password = await ask('  Manager password (min 6 chars): ');
 
-  const managerEmail = await ask('  Manager email: ');
-  const managerPassword = await ask('  Manager password (min 6 chars): ');
-
-  if (!managerEmail || managerPassword.length < 6) {
-    console.error('\n❌ Valid email and password (6+ chars) required.');
+  if (password.length < 6) {
+    console.error('  ❌ Password must be at least 6 characters');
+    rl.close();
     process.exit(1);
   }
 
-  let managerUid;
-  try {
-    const userCred = await createUserWithEmailAndPassword(authInstance, managerEmail, managerPassword);
-    managerUid = userCred.user.uid;
-    console.log(`   ✅ Auth user created (UID: ${managerUid})\n`);
-  } catch (err) {
-    if (err.code === 'auth/email-already-in-use') {
-      console.log('   ⚠️  Email already exists, signing in...');
-      try {
-        const userCred = await signInWithEmailAndPassword(authInstance, managerEmail, managerPassword);
-        managerUid = userCred.user.uid;
-        console.log(`   ✅ Signed in (UID: ${managerUid})\n`);
-      } catch (signInErr) {
-        console.error(`\n❌ Could not sign in: ${signInErr.message}`);
-        process.exit(1);
-      }
-    } else {
-      console.error(`\n❌ Failed to create user: ${err.message}`);
-      process.exit(1);
-    }
+  console.log('\n  Creating manager account...');
+  const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
+  if (authError) {
+    console.error('  ❌ Auth error:', authError.message);
+    rl.close();
+    process.exit(1);
   }
 
-  // Create manager staff document
-  await setDoc(doc(db, 'staff', managerUid), {
+  // Create staff record
+  const { error: staffError } = await supabase.from('staff').insert({
+    id: authData.user.id,
     name: 'Manager',
-    email: managerEmail,
+    email,
     role: 'manager',
     active: true,
-    createdAt: new Date(),
+    created_at: new Date().toISOString(),
   });
-  console.log('   ✅ Manager staff document created\n');
+  if (staffError) {
+    console.error('  ⚠️  Staff record error (may already exist):', staffError.message);
+  } else {
+    console.log('  ✅ Manager account created\n');
+  }
 
   // Step 3: Seed data
-  console.log('━━━ Step 3: Seed Database ━━━\n');
+  console.log('━━━ Step 3: Seed Data ━━━\n');
+  const doSeed = await ask('  Seed menu items, tables, and settings? (y/n): ');
 
-  // Seed menu items
-  console.log('📋 Seeding menu items...');
-  try {
-    const { MENU_ITEMS } = await import('../../foodmenu/src/menuItems.js');
-    const items = MENU_ITEMS.map((item) => ({
-      ...item,
-      available: true,
-      sortOrder: item.id,
-      createdAt: new Date(),
-    }));
-    for (const item of items) {
-      await setDoc(doc(db, 'menu', `item_${item.id}`), item);
+  if (doSeed.toLowerCase() === 'y') {
+    // Import menu items
+    let menuItems = [];
+    try {
+      const mod = await import('../../foodmenu/src/menuItems.js');
+      menuItems = mod.MENU_ITEMS || [];
+    } catch {
+      console.log('  ⚠️  Could not import menu items from customer app. Skipping menu seed.');
     }
-    console.log(`   ✅ ${items.length} menu items seeded`);
-  } catch (err) {
-    console.error(`   ❌ Menu seed failed: ${err.message}`);
-    console.log('   (Make sure the foodmenu project is at ../foodmenu/)');
-  }
 
-  // Seed tables
-  console.log('🪑 Seeding tables...');
-  for (let i = 1; i <= 10; i++) {
-    await setDoc(doc(db, 'tables', `table_${i}`), {
-      number: i,
-      name: `Table ${i}`,
+    if (menuItems.length > 0) {
+      console.log(`  Seeding ${menuItems.length} menu items...`);
+      const items = menuItems.map((item, idx) => ({
+        name: item.name,
+        name_kh: item.nameKh || '',
+        category: item.category || 'Food',
+        price: item.price,
+        image: item.image || '',
+        description: item.description || '',
+        ingredients: item.ingredients || [],
+        available: true,
+        sort_order: idx,
+        created_at: new Date().toISOString(),
+      }));
+
+      const { error } = await supabase.from('menu').insert(items);
+      if (error) console.error('  ⚠️  Menu seed error:', error.message);
+      else console.log(`  ✅ ${items.length} menu items seeded`);
+    }
+
+    // Seed tables
+    console.log('  Seeding tables...');
+    const tables = Array.from({ length: 10 }, (_, i) => ({
+      number: i + 1,
+      name: `Table ${i + 1}`,
       status: 'available',
-      currentOrderId: null,
-      capacity: i <= 4 ? 4 : i <= 8 ? 6 : 8,
-      createdAt: new Date(),
+      current_order_id: null,
+      capacity: i < 4 ? 4 : i < 8 ? 6 : 8,
+      created_at: new Date().toISOString(),
+    }));
+    const { error: tableError } = await supabase.from('tables').insert(tables);
+    if (tableError) console.error('  ⚠️  Table seed error:', tableError.message);
+    else console.log('  ✅ 10 tables seeded');
+
+    // Seed settings
+    console.log('  Seeding settings...');
+    const { error: settingsError } = await supabase.from('settings').upsert({
+      id: 'restaurant',
+      value: {
+        restaurantName: 'Khmer Surin Restaurant',
+        address: '',
+        phone: '',
+        taxRate: 0,
+        packagingFee: 2,
+        currency: 'USD',
+        tableCount: 10,
+        receiptFooter: 'Thank you! Please come again. / អរគុណ!',
+      },
+      updated_at: new Date().toISOString(),
     });
+    if (settingsError) console.error('  ⚠️  Settings seed error:', settingsError.message);
+    else console.log('  ✅ Settings seeded');
   }
-  console.log('   ✅ 10 tables seeded');
 
-  // Seed settings
-  console.log('⚙️  Seeding settings...');
-  await setDoc(doc(db, 'settings', 'restaurant'), {
-    restaurantName: 'Khmer Surin Restaurant',
-    address: '',
-    phone: '',
-    taxRate: 0,
-    packagingFee: 2,
-    currency: 'USD',
-    tableCount: 10,
-    receiptFooter: 'Thank you! Please come again. / អរគុណ!',
-    createdAt: new Date(),
-  });
-  console.log('   ✅ Settings seeded');
-
-  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('🎉 Setup complete!\n');
+  console.log('\n━━━ Setup Complete! ━━━\n');
   console.log('Next steps:');
-  console.log(`  1. Deploy Firestore rules: firebase deploy --only firestore:rules`);
-  console.log(`  2. Start the app: npm run dev`);
-  console.log(`  3. Log in with: ${managerEmail}`);
-  console.log(`  4. Go to Admin → Staff to create cashier/waiter/kitchen accounts`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  console.log('  1. Make sure you ran supabase/schema.sql in Supabase SQL Editor');
+  console.log('  2. Run: npm run dev');
+  console.log('  3. Log in with your manager email and password\n');
 
   rl.close();
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error('\n❌ Setup failed:', err.message);
-  process.exit(1);
-});
+main();

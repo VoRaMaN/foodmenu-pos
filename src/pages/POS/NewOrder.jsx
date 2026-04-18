@@ -4,8 +4,7 @@ import { useMenuContext } from '../../contexts/MenuContext';
 import { useTables } from '../../hooks/useTables';
 import { useOrders } from '../../hooks/useOrders';
 import { useAuth } from '../../contexts/AuthContext';
-import { db } from '../../firebase';
-import { doc as firestoreDoc, updateDoc } from 'firebase/firestore';
+import { supabase } from '../../supabase';
 import { Search, Plus, Minus, ShoppingCart, ArrowLeft, Check } from 'lucide-react';
 
 // Generate a human-readable daily order number: YYMMDD-HHMM-SS (e.g. 260418-1423-05)
@@ -84,16 +83,16 @@ export default function NewOrder() {
         tax: 0,
         total,
         notes: orderNotes,
-        createdBy: user.uid,
+        createdBy: user.id,
         orderNumber: generateOrderNumber(),
       });
 
       // Update table status
       if (selectedTable !== 'takeaway') {
-        await updateDoc(firestoreDoc(db, 'tables', selectedTable), {
+        await supabase.from('tables').update({
           status: 'occupied',
-          currentOrderId: orderId,
-        });
+          current_order_id: orderId,
+        }).eq('id', selectedTable);
       }
 
       navigate('/pos');

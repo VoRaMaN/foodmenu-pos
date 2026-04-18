@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db } from '../../firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { supabase } from '../../supabase';
 import { ShoppingCart, DollarSign, TrendingUp, Clock } from 'lucide-react';
 
 export default function Dashboard() {
@@ -14,27 +13,25 @@ export default function Dashboard() {
         today.setHours(0, 0, 0, 0);
 
         // Get today's completed orders
-        const ordersRef = collection(db, 'orders');
-        const todayQuery = query(ordersRef, where('status', '==', 'completed'), orderBy('createdAt', 'desc'));
-        const todaySnap = await getDocs(todayQuery);
-        const todayOrders = todaySnap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .filter((o) => {
-            const created = o.createdAt?.toDate?.() || new Date(0);
-            return created >= today;
-          });
+        const { data: todayOrders } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('status', 'completed')
+          .gte('created_at', today.toISOString());
 
-        const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+        const todayRevenue = (todayOrders || []).reduce((sum, o) => sum + (o.total || 0), 0);
 
         // Active orders
-        const activeQuery = query(ordersRef, where('status', 'in', ['new', 'sent_to_kitchen', 'preparing', 'ready', 'served']));
-        const activeSnap = await getDocs(activeQuery);
+        const { count } = await supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true })
+          .in('status', ['new', 'sent_to_kitchen', 'preparing', 'ready', 'served']);
 
         setStats({
-          todayOrders: todayOrders.length,
+          todayOrders: (todayOrders || []).length,
           todayRevenue,
-          activeOrders: activeSnap.size,
-          avgOrderValue: todayOrders.length > 0 ? todayRevenue / todayOrders.length : 0,
+          activeOrders: count || 0,
+          avgOrderValue: todayOrders?.length > 0 ? todayRevenue / todayOrders.length : 0,
         });
       } catch (err) {
         console.error('Failed to fetch stats:', err);

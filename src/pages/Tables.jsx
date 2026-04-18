@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useTables } from '../hooks/useTables';
-import { db } from '../firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { supabase } from '../supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 const statusColors = {
@@ -22,8 +21,8 @@ export default function Tables() {
   const navigate = useNavigate();
 
   const handleTableClick = (table) => {
-    if (table.status === 'occupied' && table.currentOrderId) {
-      navigate(`/pos/order/${table.currentOrderId}`);
+    if (table.status === 'occupied' && table.current_order_id) {
+      navigate(`/pos/order/${table.current_order_id}`);
     } else if (table.status === 'available') {
       navigate('/pos/new-order');
     }
@@ -33,7 +32,7 @@ export default function Tables() {
     e.stopPropagation();
     if (!hasRole('manager', 'cashier')) return;
     const newStatus = table.status === 'reserved' ? 'available' : 'reserved';
-    await updateDoc(doc(db, 'tables', table.id), { status: newStatus });
+    await supabase.from('tables').update({ status: newStatus }).eq('id', table.id);
   };
 
   if (loading) {

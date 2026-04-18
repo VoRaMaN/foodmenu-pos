@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import { useMenuContext } from '../../contexts/MenuContext';
-import { db, storage } from '../../firebase';
-import { doc, addDoc, updateDoc, deleteDoc, collection } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { supabase } from '../../supabase';
 import { Plus, Pencil, Trash2, Eye, EyeOff, X, Save } from 'lucide-react';
 
 const defaultItem = {
-  name: '', nameKh: '', category: 'Food', price: 0,
+  name: '', name_kh: '', category: 'Food', price: 0,
   image: '', description: '', ingredients: [],
-  available: true, sortOrder: 0,
+  available: true, sort_order: 0,
 };
 
 export default function MenuManagement() {
@@ -30,7 +28,7 @@ export default function MenuManagement() {
 
   const openNew = () => {
     setEditing('new');
-    setForm({ ...defaultItem, sortOrder: items.length });
+    setForm({ ...defaultItem, sort_order: items.length });
     setIngredientInput('');
   };
 
@@ -39,10 +37,11 @@ export default function MenuManagement() {
     if (!file) return;
     setUploading(true);
     try {
-      const storageRef = ref(storage, `menu/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
-      setForm((prev) => ({ ...prev, image: url }));
+      const filePath = `menu/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage.from('menu-images').upload(filePath, file);
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from('menu-images').getPublicUrl(filePath);
+      setForm((prev) => ({ ...prev, image: publicUrl }));
     } catch (err) {
       console.error('Upload failed:', err);
       alert('Image upload failed');
@@ -70,22 +69,24 @@ export default function MenuManagement() {
     try {
       const data = {
         name: form.name,
-        nameKh: form.nameKh,
+        name_kh: form.name_kh,
         category: form.category,
         price: parseFloat(form.price),
         image: form.image,
         description: form.description,
         ingredients: form.ingredients,
         available: form.available,
-        sortOrder: parseInt(form.sortOrder) || 0,
-        updatedAt: new Date(),
+        sort_order: parseInt(form.sort_order) || 0,
+        updated_at: new Date().toISOString(),
       };
 
       if (editing === 'new') {
-        data.createdAt = new Date();
-        await addDoc(collection(db, 'menu'), data);
+        data.created_at = new Date().toISOString();
+        const { error } = await supabase.from('menu').insert(data);
+        if (error) throw error;
       } else {
-        await updateDoc(doc(db, 'menu', editing.id), data);
+        const { error } = await supabase.from('menu').update(data).eq('id', editing.id);
+        if (error) throw error;
       }
       setEditing(null);
     } catch (err) {
@@ -99,7 +100,8 @@ export default function MenuManagement() {
   const handleDelete = async (item) => {
     if (!window.confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
     try {
-      await deleteDoc(doc(db, 'menu', item.id));
+      const { error } = await supabase.from('menu').delete().eq('id', item.id);
+      if (error) throw error;
     } catch (err) {
       console.error('Delete failed:', err);
     }
@@ -107,7 +109,8 @@ export default function MenuManagement() {
 
   const toggleAvailability = async (item) => {
     try {
-      await updateDoc(doc(db, 'menu', item.id), { available: !item.available });
+      const { error } = await supabase.from('menu').update({ available: !item.available }).eq('id', item.id);
+      if (error) throw error;
     } catch (err) {
       console.error('Toggle failed:', err);
     }
@@ -139,8 +142,8 @@ export default function MenuManagement() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Name (Khmer)</label>
               <input
-                value={form.nameKh}
-                onChange={(e) => setForm({ ...form, nameKh: e.target.value })}
+                value={form.name_kh}
+                onChange={(e) => setForm({ ...form, name_kh: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
                 style={{ fontFamily: 'var(--font-khmer)' }}
               />
@@ -174,8 +177,8 @@ export default function MenuManagement() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
               <input
                 type="number"
-                value={form.sortOrder}
-                onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
+                value={form.sort_order}
+                onChange={(e) => setForm({ ...form, sort_order: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
               />
             </div>
@@ -318,7 +321,7 @@ export default function MenuManagement() {
                     )}
                     <div>
                       <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                      <p className="text-xs text-gray-500" style={{ fontFamily: 'var(--font-khmer)' }}>{item.nameKh}</p>
+                      <p className="text-xs text-gray-500" style={{ fontFamily: 'var(--font-khmer)' }}>{item.name_kh}</p>
                     </div>
                   </div>
                 </td>

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db } from '../../firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { supabase } from '../../supabase';
 import { useOrders } from '../../hooks/useOrders';
 import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, Clock, ChefHat, CheckCircle, XCircle, CreditCard, Printer } from 'lucide-react';
@@ -33,13 +32,21 @@ export default function OrderDetail() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'orders', id), (snap) => {
-      if (snap.exists()) {
-        setOrder({ id: snap.id, ...snap.data() });
-      }
+    const fetchOrder = async () => {
+      const { data } = await supabase.from('orders').select('*').eq('id', id).single();
+      if (data) setOrder(data);
       setLoading(false);
-    });
-    return unsub;
+    };
+    fetchOrder();
+
+    const channel = supabase
+      .channel(`order-${id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${id}` }, (payload) => {
+        setOrder(payload.new);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [id]);
 
   const handleStatusAdvance = async () => {
@@ -52,7 +59,7 @@ export default function OrderDetail() {
     }
 
     try {
-      await updateOrderStatus(order.id, flow.next, user.uid);
+      await updateOrderStatus(order.id, flow.next, user.id);
     } catch (err) {
       console.error('Failed to update status:', err);
     }
@@ -61,7 +68,7 @@ export default function OrderDetail() {
   const handleCancel = async () => {
     if (!window.confirm('Are you sure you want to cancel this order?')) return;
     try {
-      await updateOrderStatus(order.id, 'cancelled', user.uid);
+      await updateOrderStatus(order.id, 'cancelled', user.id);
     } catch (err) {
       console.error('Failed to cancel:', err);
     }
@@ -85,7 +92,7 @@ export default function OrderDetail() {
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000);
+    const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
@@ -99,10 +106,10 @@ export default function OrderDetail() {
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Order #{order.orderNumber || order.id?.slice(0, 6)}</h1>
+            <h1 className="text-xl font-bold text-gray-900">Order #{order.order_number || order.id?.slice(0, 6)}</h1>
             <p className="text-sm text-gray-500">
-              {order.tableId === 'takeaway' ? '🛍️ Takeaway' : `🪑 Table ${order.tableNumber}`}
-              {' · '}{formatTime(order.createdAt)}
+              {order.table_id === 'takeaway' ? '🛍️ Takeaway' : `🪑 Table ${order.table_number}`}
+              {' · '}{formatTime(order.created_at)}
             </p>
           </div>
           <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[order.status]}`}>
@@ -129,7 +136,7 @@ export default function OrderDetail() {
             <span className="text-gray-500">Subtotal</span>
             <span>${order.subtotal?.toFixed(2)}</span>
           </div>
-          {order.tableId === 'takeaway' && (
+          {order.table_id === 'takeaway' && (
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Packaging</span>
               <span>$2.00</span>
@@ -142,13 +149,13 @@ export default function OrderDetail() {
         </div>
 
         {/* Payment info */}
-        {order.paymentStatus === 'paid' && (
+        {order.payment_status === 'paid' && (
           <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
             <p className="text-sm font-medium text-green-700">
-              Paid via {order.paymentMethod} {order.amountPaid > 0 && `($${order.amountPaid.toFixed(2)})`}
+              Paid via {order.payment_method} {order.amount_paid > 0 && `($${Number(order.amount_paid).toFixed(2)})`}
             </p>
-            {order.paymentMethod === 'cash' && order.amountPaid > order.total && (
-              <p className="text-sm text-green-600">Change: ${(order.amountPaid - order.total).toFixed(2)}</p>
+            {order.payment_method === 'cash' && order.amount_paid > order.total && (
+              <p className="text-sm text-green-600">Change: ${(order.amount_paid - order.total).toFixed(2)}</p>
             )}
           </div>
         )}
@@ -165,12 +172,12 @@ export default function OrderDetail() {
         <div className="mt-6 border-t border-gray-100 pt-4">
           <h3 className="text-sm font-medium text-gray-700 mb-3">Status History</h3>
           <div className="space-y-2">
-            {order.statusHistory?.map((entry, i) => (
+            {order.status_history?.map((entry, i) => (
               <div key={i} className="flex items-center gap-3 text-sm">
                 <div className="w-2 h-2 rounded-full bg-purple-400" />
                 <span className="capitalize text-gray-700">{entry.status.replace(/_/g, ' ')}</span>
                 <span className="text-gray-400">
-                  {entry.timestamp?.toDate ? entry.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  {entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                 </span>
               </div>
             ))}

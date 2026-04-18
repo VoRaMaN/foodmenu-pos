@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db } from '../../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { supabase } from '../../supabase';
 import { Save, Settings as SettingsIcon } from 'lucide-react';
 
 const defaultSettings = {
@@ -23,8 +22,8 @@ export default function Settings() {
   useEffect(() => {
     const fetch = async () => {
       try {
-        const snap = await getDoc(doc(db, 'settings', 'restaurant'));
-        if (snap.exists()) setSettings({ ...defaultSettings, ...snap.data() });
+        const { data, error } = await supabase.from('settings').select('*').eq('id', 'restaurant').single();
+        if (data) setSettings({ ...defaultSettings, ...data.value });
       } catch (err) {
         console.error('Failed to fetch settings:', err);
       } finally {
@@ -37,7 +36,12 @@ export default function Settings() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await setDoc(doc(db, 'settings', 'restaurant'), { ...settings, updatedAt: new Date() });
+      const { error } = await supabase.from('settings').upsert({
+        id: 'restaurant',
+        value: { ...settings },
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {

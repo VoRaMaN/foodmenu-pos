@@ -3,7 +3,7 @@ import { forwardRef } from 'react';
 const Receipt = forwardRef(({ order, restaurantName = 'Khmer Surin Restaurant' }, ref) => {
   if (!order) return null;
 
-  const date = order.createdAt?.toDate?.() || new Date();
+  const date = new Date(order.created_at || Date.now());
 
   return (
     <div ref={ref} className="receipt-print bg-white p-4 max-w-[80mm] mx-auto font-mono text-xs">
@@ -16,7 +16,7 @@ const Receipt = forwardRef(({ order, restaurantName = 'Khmer Surin Restaurant' }
 
       <div className="flex justify-between mb-1">
         <span>Order #:</span>
-        <span className="font-bold">{order.orderNumber || order.id?.slice(0, 8)}</span>
+        <span className="font-bold">{order.order_number || order.id?.slice(0, 8)}</span>
       </div>
       <div className="flex justify-between mb-1">
         <span>Date:</span>
@@ -24,12 +24,12 @@ const Receipt = forwardRef(({ order, restaurantName = 'Khmer Surin Restaurant' }
       </div>
       <div className="flex justify-between mb-1">
         <span>Table:</span>
-        <span>{order.tableId === 'takeaway' ? 'Takeaway' : `Table ${order.tableNumber || order.tableId}`}</span>
+        <span>{order.table_id === 'takeaway' ? 'Takeaway' : `Table ${order.table_number || order.table_id}`}</span>
       </div>
-      {order.paymentMethod && (
+      {order.payment_method && (
         <div className="flex justify-between mb-1">
           <span>Payment:</span>
-          <span className="capitalize">{order.paymentMethod}</span>
+          <span className="capitalize">{order.payment_method}</span>
         </div>
       )}
 
@@ -66,7 +66,7 @@ const Receipt = forwardRef(({ order, restaurantName = 'Khmer Surin Restaurant' }
           <span>${order.tax?.toFixed(2)}</span>
         </div>
       )}
-      {order.tableId === 'takeaway' && (
+      {order.table_id === 'takeaway' && (
         <div className="flex justify-between mb-1">
           <span>Packaging:</span>
           <span>$2.00</span>
@@ -77,15 +77,15 @@ const Receipt = forwardRef(({ order, restaurantName = 'Khmer Surin Restaurant' }
         <span>${order.total?.toFixed(2)}</span>
       </div>
 
-      {order.paymentMethod === 'cash' && order.amountPaid > 0 && (
+      {order.payment_method === 'cash' && order.amount_paid > 0 && (
         <>
           <div className="flex justify-between mt-1">
             <span>Paid:</span>
-            <span>${order.amountPaid?.toFixed(2)}</span>
+            <span>${order.amount_paid?.toFixed(2)}</span>
           </div>
           <div className="flex justify-between font-bold">
             <span>Change:</span>
-            <span>${(order.amountPaid - order.total).toFixed(2)}</span>
+            <span>${(order.amount_paid - order.total).toFixed(2)}</span>
           </div>
         </>
       )}

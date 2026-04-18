@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db, auth } from '../../firebase';
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { supabase } from '../../supabase';
 import { Plus, Pencil, Trash2, X, Save, Shield } from 'lucide-react';
 
 const roles = ['cashier', 'waiter', 'kitchen', 'manager'];
@@ -22,8 +20,9 @@ export default function StaffManagement() {
 
   const fetchStaff = async () => {
     try {
-      const snap = await getDocs(collection(db, 'staff'));
-      setStaff(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const { data, error } = await supabase.from('staff').select('*');
+      if (error) throw error;
+      setStaff(data || []);
     } catch (err) {
       console.error('Failed to fetch staff:', err);
     } finally {
@@ -46,22 +45,29 @@ export default function StaffManagement() {
           setSaving(false);
           return;
         }
-        // Create Firebase Auth user
-        const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-        // Create staff doc
-        await setDoc(doc(db, 'staff', cred.user.uid), {
+        // Create Supabase Auth user
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: form.email,
+          password: form.password,
+        });
+        if (authError) throw authError;
+        // Create staff record
+        const { error: staffError } = await supabase.from('staff').insert({
+          id: authData.user.id,
           name: form.name,
           email: form.email,
           role: form.role,
           active: true,
-          createdAt: new Date(),
+          created_at: new Date().toISOString(),
         });
+        if (staffError) throw staffError;
       } else {
-        await updateDoc(doc(db, 'staff', editing.id), {
+        const { error } = await supabase.from('staff').update({
           name: form.name,
           role: form.role,
           active: form.active,
-        });
+        }).eq('id', editing.id);
+        if (error) throw error;
       }
       setEditing(null);
       fetchStaff();
@@ -76,7 +82,8 @@ export default function StaffManagement() {
   const handleDelete = async (s) => {
     if (!window.confirm(`Remove staff member "${s.name}"?`)) return;
     try {
-      await deleteDoc(doc(db, 'staff', s.id));
+      const { error } = await supabase.from('staff').delete().eq('id', s.id);
+      if (error) throw error;
       fetchStaff();
     } catch (err) {
       console.error('Delete failed:', err);

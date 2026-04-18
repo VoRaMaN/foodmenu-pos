@@ -20,11 +20,7 @@ export default function Login() {
       await login(email, password);
       navigate('/pos');
     } catch (err) {
-      setError(
-        err.code === 'auth/invalid-credential' ? 'Invalid email or password' :
-        err.code === 'auth/too-many-requests' ? 'Too many attempts. Try again later.' :
-        'Login failed. Please try again.'
-      );
+      setError(err.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }

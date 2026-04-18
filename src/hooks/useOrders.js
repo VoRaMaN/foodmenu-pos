@@ -1,67 +1,94 @@
 import { useState, useEffect, useCallback } from 'react';
-import { db } from '../firebase';
-import {
-  collection, onSnapshot, query, where, orderBy, addDoc, updateDoc, doc, serverTimestamp, Timestamp
-} from 'firebase/firestore';
+import { supabase } from '../supabase';
 
 export function useOrders(filters = {}) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+  const fetchOrders = useCallback(async () => {
+    let q = supabase.from('orders').select('*').order('created_at', { ascending: false });
 
-    if (filters.status) {
-      q = query(collection(db, 'orders'), where('status', '==', filters.status), orderBy('createdAt', 'desc'));
-    }
     if (filters.statuses && filters.statuses.length > 0) {
-      q = query(collection(db, 'orders'), where('status', 'in', filters.statuses), orderBy('createdAt', 'desc'));
+      q = q.in('status', filters.statuses);
+    } else if (filters.status) {
+      q = q.eq('status', filters.status);
     }
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setOrders(data);
-      setLoading(false);
-    });
-    return unsub;
+    const { data } = await q;
+    if (data) setOrders(data);
+    setLoading(false);
   }, [filters.status, filters.statuses?.join(',')]);
 
+  useEffect(() => {
+    fetchOrders();
+
+    const channel = supabase
+      .channel('orders-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchOrders();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchOrders]);
+
   const createOrder = useCallback(async (orderData) => {
-    const docRef = await addDoc(collection(db, 'orders'), {
-      ...orderData,
-      status: 'new',
-      paymentStatus: 'unpaid',
-      paymentMethod: null,
-      amountPaid: 0,
-      createdAt: serverTimestamp(),
-      statusHistory: [{
+    const { data, error } = await supabase
+      .from('orders')
+      .insert({
+        order_number: orderData.orderNumber,
+        table_id: orderData.tableId,
+        table_number: orderData.tableNumber,
+        items: orderData.items,
+        subtotal: orderData.subtotal,
+        tax: orderData.tax || 0,
+        total: orderData.total,
+        notes: orderData.notes || '',
         status: 'new',
-        timestamp: Timestamp.now(),
-        staffUID: orderData.createdBy,
-      }],
-    });
-    return docRef.id;
+        payment_status: 'unpaid',
+        payment_method: null,
+        amount_paid: 0,
+        created_by: orderData.createdBy,
+        status_history: [{
+          status: 'new',
+          timestamp: new Date().toISOString(),
+          staffUID: orderData.createdBy,
+        }],
+      })
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    return data.id;
   }, []);
 
   const updateOrderStatus = useCallback(async (orderId, newStatus, staffUID) => {
-    const orderRef = doc(db, 'orders', orderId);
-    await updateDoc(orderRef, {
+    const order = orders.find(o => o.id === orderId);
+    const history = [...(order?.status_history || []), {
       status: newStatus,
-      [`statusHistory`]: [...(orders.find(o => o.id === orderId)?.statusHistory || []), {
-        status: newStatus,
-        timestamp: Timestamp.now(),
-        staffUID,
-      }],
-    });
+      timestamp: new Date().toISOString(),
+      staffUID,
+    }];
+
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: newStatus, status_history: history })
+      .eq('id', orderId);
+
+    if (error) throw error;
   }, [orders]);
 
   const updateOrderPayment = useCallback(async (orderId, paymentData) => {
-    const orderRef = doc(db, 'orders', orderId);
-    await updateDoc(orderRef, {
-      ...paymentData,
-      paymentStatus: 'paid',
-      status: 'completed',
-    });
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        ...paymentData,
+        payment_status: 'paid',
+        status: 'completed',
+      })
+      .eq('id', orderId);
+
+    if (error) throw error;
   }, []);
 
   return { orders, loading, createOrder, updateOrderStatus, updateOrderPayment };

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db } from '../../firebase';
-import { doc, onSnapshot, updateDoc, Timestamp } from 'firebase/firestore';
+import { supabase } from '../../supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, Banknote, CreditCard, QrCode, CheckCircle, Printer } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
@@ -22,11 +21,12 @@ export default function Payment() {
   const handlePrint = useReactToPrint({ contentRef: receiptRef });
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'orders', orderId), (snap) => {
-      if (snap.exists()) setOrder({ id: snap.id, ...snap.data() });
+    const fetchOrder = async () => {
+      const { data } = await supabase.from('orders').select('*').eq('id', orderId).single();
+      if (data) setOrder(data);
       setLoading(false);
-    });
-    return unsub;
+    };
+    fetchOrder();
   }, [orderId]);
 
   const change = paymentMethod === 'cash' && amountPaid ? Math.max(0, parseFloat(amountPaid) - (order?.total || 0)) : 0;
@@ -39,23 +39,23 @@ export default function Payment() {
 
     setProcessing(true);
     try {
-      const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, {
-        paymentMethod,
-        paymentStatus: 'paid',
-        amountPaid: paymentMethod === 'cash' ? parseFloat(amountPaid) : order.total,
+      const statusHistory = [...(order.status_history || []), {
         status: 'completed',
-        statusHistory: [...(order.statusHistory || []), {
-          status: 'completed',
-          timestamp: Timestamp.now(),
-          staffUID: user.uid,
-        }],
-      });
+        timestamp: new Date().toISOString(),
+        staffUID: user.id,
+      }];
+
+      await supabase.from('orders').update({
+        payment_method: paymentMethod,
+        payment_status: 'paid',
+        amount_paid: paymentMethod === 'cash' ? parseFloat(amountPaid) : order.total,
+        status: 'completed',
+        status_history: statusHistory,
+      }).eq('id', orderId);
 
       // Free up table
-      if (order.tableId && order.tableId !== 'takeaway') {
-        const tableRef = doc(db, 'tables', order.tableId);
-        await updateDoc(tableRef, { status: 'available', currentOrderId: null });
+      if (order.table_id && order.table_id !== 'takeaway') {
+        await supabase.from('tables').update({ status: 'available', current_order_id: null }).eq('id', order.table_id);
       }
 
       setCompleted(true);
@@ -117,7 +117,7 @@ export default function Payment() {
 
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h1 className="text-xl font-bold text-gray-900 mb-1">Process Payment</h1>
-        <p className="text-sm text-gray-500 mb-6">Order #{order.orderNumber || order.id?.slice(0, 6)}</p>
+        <p className="text-sm text-gray-500 mb-6">Order #{order.order_number || order.id?.slice(0, 6)}</p>
 
         {/* Order summary */}
         <div className="bg-gray-50 rounded-lg p-4 mb-6">

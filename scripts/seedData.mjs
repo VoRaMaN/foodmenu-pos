@@ -1,150 +1,132 @@
 /**
- * Seed Script: Migrate menuItems.js data to Firebase Firestore
+ * Seed Script: Populate Supabase with menu, tables, and settings
  * 
  * Usage:
- *   1. Create a .env file with your Firebase config (see .env.example)
- *   2. Run: node scripts/seedData.mjs
- * 
- * This script:
- *   - Seeds /menu collection with all items from the customer app
- *   - Seeds /tables collection with 10 tables
- *   - Seeds /settings/restaurant with default config
- *   - Creates initial manager staff document (you must create the Auth user first via Firebase Console)
- * 
- * Prerequisites:
- *   npm install firebase dotenv
+ *   1. Create a .env file with your Supabase config (see .env.example)
+ *   2. Run the SQL from supabase/schema.sql in the Supabase SQL Editor
+ *   3. Run: node scripts/seedData.mjs
  */
 
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, getDocs } from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
+import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-// Load .env
-import 'dotenv/config';
-
-// Direct import of menu items from the customer app
-import { MENU_ITEMS } from '../../foodmenu/src/menuItems.js';
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY,
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.VITE_FIREBASE_APP_ID,
-};
-
-if (!firebaseConfig.projectId) {
-  console.error('❌ Firebase config not found. Create a .env file with your Firebase credentials.');
-  console.error('   See .env.example for the required variables.');
+// Load .env
+const envPath = join(__dirname, '..', '.env');
+try {
+  const envContent = readFileSync(envPath, 'utf-8');
+  envContent.split('\n').forEach((line) => {
+    const [key, ...val] = line.split('=');
+    if (key && val.length) process.env[key.trim()] = val.join('=').trim();
+  });
+} catch {
+  console.error('❌ .env file not found. Create one from .env.example');
   process.exit(1);
 }
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 
-// Menu items from the customer app (directly imported)
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Supabase config not found. Check your .env file.');
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Import menu items from the customer app
+let MENU_ITEMS = [];
+try {
+  const mod = await import('../../foodmenu/src/menuItems.js');
+  MENU_ITEMS = mod.MENU_ITEMS || [];
+} catch {
+  console.warn('⚠️  Could not import menu items from customer app.');
+}
 
 async function seedMenu() {
+  if (MENU_ITEMS.length === 0) {
+    console.log('📋 No menu items to seed (customer app not found)');
+    return;
+  }
+
   console.log('📋 Seeding menu items...');
-  
-  const items = MENU_ITEMS.map((item) => ({
-    ...item,
+  const items = MENU_ITEMS.map((item, idx) => ({
+    name: item.name,
+    name_kh: item.nameKh || '',
+    category: item.category || 'Food',
+    price: item.price,
+    image: item.image || '',
+    description: item.description || '',
+    ingredients: item.ingredients || [],
     available: true,
-    sortOrder: item.id,
-    createdAt: new Date(),
+    sort_order: idx,
+    created_at: new Date().toISOString(),
   }));
 
-  console.log(`   Found ${items.length} menu items`);
-  
-  for (const item of items) {
-    await setDoc(doc(db, 'menu', `item_${item.id}`), item);
+  const { error } = await supabase.from('menu').insert(items);
+  if (error) {
+    console.error('   ❌ Menu seed failed:', error.message);
+  } else {
+    console.log(`   ✅ ${items.length} menu items seeded`);
   }
-  console.log(`   ✅ ${items.length} menu items seeded`);
 }
 
 async function seedTables() {
   console.log('🪑 Seeding tables...');
-  
-  for (let i = 1; i <= 10; i++) {
-    await setDoc(doc(db, 'tables', `table_${i}`), {
-      number: i,
-      name: `Table ${i}`,
-      status: 'available',
-      currentOrderId: null,
-      capacity: i <= 4 ? 4 : i <= 8 ? 6 : 8, // Small, medium, large tables
-      createdAt: new Date(),
-    });
+  const tables = Array.from({ length: 10 }, (_, i) => ({
+    number: i + 1,
+    name: `Table ${i + 1}`,
+    status: 'available',
+    current_order_id: null,
+    capacity: i < 4 ? 4 : i < 8 ? 6 : 8,
+    created_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase.from('tables').insert(tables);
+  if (error) {
+    console.error('   ❌ Tables seed failed:', error.message);
+  } else {
+    console.log('   ✅ 10 tables seeded');
   }
-  console.log('   ✅ 10 tables seeded');
 }
 
 async function seedSettings() {
   console.log('⚙️  Seeding settings...');
-  
-  await setDoc(doc(db, 'settings', 'restaurant'), {
-    restaurantName: 'Khmer Surin Restaurant',
-    address: '',
-    phone: '',
-    taxRate: 0,
-    packagingFee: 2,
-    currency: 'USD',
-    tableCount: 10,
-    receiptFooter: 'Thank you! Please come again. / អរគុណ!',
-    createdAt: new Date(),
+  const { error } = await supabase.from('settings').upsert({
+    id: 'restaurant',
+    value: {
+      restaurantName: 'Khmer Surin Restaurant',
+      address: '',
+      phone: '',
+      taxRate: 0,
+      packagingFee: 2,
+      currency: 'USD',
+      tableCount: 10,
+      receiptFooter: 'Thank you! Please come again. / អរគុណ!',
+    },
+    updated_at: new Date().toISOString(),
   });
-  console.log('   ✅ Settings seeded');
-}
-
-async function seedManagerStaff() {
-  console.log('👤 Setting up manager staff document...');
-  console.log('   ⚠️  You need to:');
-  console.log('      1. Go to Firebase Console → Authentication → Add user');
-  console.log('      2. Create a user with your desired email/password');
-  console.log('      3. Copy the UID and update the staff document');
-  console.log('');
-  console.log('   Creating placeholder manager document...');
-  
-  // Check if any staff exist
-  const staffSnap = await getDocs(collection(db, 'staff'));
-  if (staffSnap.empty) {
-    // Create a placeholder - user should update UID after creating Auth account
-    await setDoc(doc(db, 'staff', 'REPLACE_WITH_AUTH_UID'), {
-      name: 'Manager',
-      email: 'manager@restaurant.com',
-      role: 'manager',
-      active: true,
-      createdAt: new Date(),
-    });
-    console.log('   ✅ Placeholder manager document created');
-    console.log('   ⚠️  Replace the document ID with the actual Firebase Auth UID');
+  if (error) {
+    console.error('   ❌ Settings seed failed:', error.message);
   } else {
-    console.log('   ⏭️  Staff documents already exist, skipping');
+    console.log('   ✅ Settings seeded');
   }
 }
 
 async function main() {
-  console.log('🚀 Starting Firestore seed...\n');
-  
-  try {
-    await seedMenu();
-    await seedTables();
-    await seedSettings();
-    await seedManagerStaff();
-    
-    console.log('\n✅ Seed complete!');
-    console.log('\nNext steps:');
-    console.log('  1. Create a Firebase Auth user in the console');
-    console.log('  2. Update the staff document ID to match the Auth UID');
-    console.log('  3. Set up the .env file in foodmenu-pos with your Firebase config');
-    console.log('  4. Run npm run dev to start the POS app');
-  } catch (err) {
-    console.error('\n❌ Seed failed:', err.message);
-  }
-  
+  console.log('🚀 Starting Supabase seed...\n');
+
+  await seedMenu();
+  await seedTables();
+  await seedSettings();
+
+  console.log('\n✅ Seed complete!');
+  console.log('\nNext steps:');
+  console.log('  1. Run the setup script to create a manager: node scripts/setup.mjs');
+  console.log('  2. Run: npm run dev');
   process.exit(0);
 }
 

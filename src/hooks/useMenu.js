@@ -1,23 +1,35 @@
 import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { supabase } from '../supabase';
 
 export function useMenu() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const q = query(collection(db, 'menu'), orderBy('sortOrder', 'asc'));
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setItems(data);
-      setLoading(false);
-    }, (err) => {
+  const fetchMenu = async () => {
+    const { data, error: err } = await supabase
+      .from('menu')
+      .select('*')
+      .order('sort_order', { ascending: true });
+    if (err) {
       setError(err.message);
-      setLoading(false);
-    });
-    return unsub;
+    } else {
+      setItems(data);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchMenu();
+
+    const channel = supabase
+      .channel('menu-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu' }, () => {
+        fetchMenu();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const categories = [...new Set(items.map((i) => i.category))];

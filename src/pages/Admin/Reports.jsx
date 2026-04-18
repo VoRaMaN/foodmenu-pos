@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { db } from '../../firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { supabase } from '../../supabase';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Calendar, Download, DollarSign, ShoppingCart, TrendingUp } from 'lucide-react';
 
@@ -16,13 +15,13 @@ export default function Reports() {
     const fetchOrders = async () => {
       setLoading(true);
       try {
-        const q = query(
-          collection(db, 'orders'),
-          where('status', '==', 'completed'),
-          orderBy('createdAt', 'desc')
-        );
-        const snap = await getDocs(q);
-        setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('status', 'completed')
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        setOrders(data || []);
       } catch (err) {
         console.error('Failed to fetch orders:', err);
       } finally {
@@ -54,7 +53,7 @@ export default function Reports() {
     }
 
     return orders.filter((o) => {
-      const created = o.createdAt?.toDate?.() || new Date(0);
+      const created = new Date(o.created_at || 0);
       if (dateRange === 'custom') {
         const end = new Date(start);
         end.setDate(end.getDate() + 1);
@@ -72,7 +71,7 @@ export default function Reports() {
     // Payment method breakdown
     const paymentBreakdown = {};
     filteredOrders.forEach((o) => {
-      const method = o.paymentMethod || 'unknown';
+      const method = o.payment_method || 'unknown';
       paymentBreakdown[method] = (paymentBreakdown[method] || 0) + (o.total || 0);
     });
 
@@ -91,7 +90,7 @@ export default function Reports() {
     // Hourly distribution
     const hourly = {};
     filteredOrders.forEach((o) => {
-      const hour = (o.createdAt?.toDate?.() || new Date()).getHours();
+      const hour = new Date(o.created_at || 0).getHours();
       hourly[hour] = (hourly[hour] || 0) + 1;
     });
     const hourlyData = Array.from({ length: 24 }, (_, i) => ({
