@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -24,7 +24,7 @@ export default function Layout() {
   const [online, setOnline] = useState(navigator.onLine);
   const navigate = useNavigate();
 
-  useState(() => {
+  useEffect(() => {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
     window.addEventListener('online', onOnline);
@@ -33,7 +33,7 @@ export default function Layout() {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
-  });
+  }, []);
 
   const filteredNav = navItems.filter((item) => item.roles.includes(role));
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, Banknote, CreditCard, QrCode, CheckCircle, Printer } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
@@ -47,7 +47,7 @@ export default function Payment() {
         status: 'completed',
         statusHistory: [...(order.statusHistory || []), {
           status: 'completed',
-          timestamp: new Date(),
+          timestamp: Timestamp.now(),
           staffUID: user.uid,
         }],
       });

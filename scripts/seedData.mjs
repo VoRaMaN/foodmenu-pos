@@ -17,12 +17,14 @@
 
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, getDocs } from 'firebase/firestore';
-import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 // Load .env
 import 'dotenv/config';
+
+// Direct import of menu items from the customer app
+import { MENU_ITEMS } from '../../foodmenu/src/menuItems.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -44,42 +46,17 @@ if (!firebaseConfig.projectId) {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// Menu items from the customer app
-// We import them by reading the file and extracting the data
-const menuItemsPath = join(__dirname, '..', '..', 'foodmenu', 'src', 'menuItems.js');
+// Menu items from the customer app (directly imported)
 
 async function seedMenu() {
   console.log('📋 Seeding menu items...');
   
-  // Read and parse menuItems.js
-  const content = readFileSync(menuItemsPath, 'utf-8');
-  
-  // Extract the array from the file using a simple approach
-  // Parse JSON-like objects from the JS file
-  const items = [];
-  const regex = /\{\s*id:\s*(\d+),\s*name:\s*'([^']*)',\s*nameKh:\s*'([^']*)',\s*category:\s*'([^']*)',\s*price:\s*([\d.]+),\s*image:\s*'([^']*)',\s*description:\s*'([^']*)',\s*ingredients:\s*\[([^\]]*)\]\s*\}/g;
-  
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    const ingredients = match[8]
-      .split(',')
-      .map(s => s.trim().replace(/^'|'$/g, ''))
-      .filter(Boolean);
-    
-    items.push({
-      id: parseInt(match[1]),
-      name: match[2],
-      nameKh: match[3],
-      category: match[4],
-      price: parseFloat(match[5]),
-      image: match[6],
-      description: match[7],
-      ingredients,
-      available: true,
-      sortOrder: parseInt(match[1]),
-      createdAt: new Date(),
-    });
-  }
+  const items = MENU_ITEMS.map((item) => ({
+    ...item,
+    available: true,
+    sortOrder: item.id,
+    createdAt: new Date(),
+  }));
 
   console.log(`   Found ${items.length} menu items`);
   

@@ -8,6 +8,18 @@ import { db } from '../../firebase';
 import { doc as firestoreDoc, updateDoc } from 'firebase/firestore';
 import { Search, Plus, Minus, ShoppingCart, ArrowLeft, Check } from 'lucide-react';
 
+// Generate a human-readable daily order number: YYMMDD-HHMM-SS (e.g. 260418-1423-05)
+function generateOrderNumber() {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mi = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  return `${yy}${mm}${dd}-${hh}${mi}-${ss}`;
+}
+
 export default function NewOrder() {
   const { items: menuItems, categories } = useMenuContext();
   const { tables } = useTables();
@@ -66,14 +78,14 @@ export default function NewOrder() {
       const tableObj = tables.find((t) => t.id === selectedTable);
       const orderId = await createOrder({
         tableId: selectedTable,
-        tableNumber: tableObj?.number || selectedTable,
+        tableNumber: selectedTable === 'takeaway' ? null : tableObj?.number,
         items: cart,
         subtotal,
         tax: 0,
         total,
         notes: orderNotes,
         createdBy: user.uid,
-        orderNumber: Date.now(), // Will be replaced with daily counter
+        orderNumber: generateOrderNumber(),
       });
 
       // Update table status

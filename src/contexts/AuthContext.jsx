@@ -26,13 +26,16 @@ export function AuthProvider({ children }) {
         setUser(firebaseUser);
         try {
           const staffDoc = await getDoc(doc(db, 'staff', firebaseUser.uid));
-          if (staffDoc.exists()) {
+          if (staffDoc.exists() && staffDoc.data().active !== false) {
             setStaffProfile({ id: staffDoc.id, ...staffDoc.data() });
           } else {
-            setStaffProfile({ id: firebaseUser.uid, role: 'cashier', name: firebaseUser.email });
+            // No staff document or account disabled — deny access
+            setStaffProfile(null);
+            await signOut(auth);
           }
         } catch {
-          setStaffProfile({ id: firebaseUser.uid, role: 'cashier', name: firebaseUser.email });
+          setStaffProfile(null);
+          await signOut(auth);
         }
       } else {
         setUser(null);
