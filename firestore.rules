@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: get staff role
+    function getRole() {
+      return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role;
+    }
+
+    // Helper: check if user has one of the given roles
+    function hasRole(roles) {
+      return isAuth() && getRole() in roles;
+    }
+
+    // Menu items - readable by all authenticated, writable by manager
+    match /menu/{itemId} {
+      allow read: if true; // Public for customer app
+      allow write: if hasRole(['manager']);
+    }
+
+    // Orders - readable by authenticated staff, writable based on role
+    match /orders/{orderId} {
+      allow read: if isAuth();
+      allow create: if hasRole(['cashier', 'waiter', 'manager']);
+      allow update: if isAuth();
+      allow delete: if hasRole(['manager']);
+    }
+
+    // Tables - readable by authenticated, writable by staff
+    match /tables/{tableId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['cashier', 'waiter', 'manager']);
+    }
+
+    // Staff profiles - readable by authenticated, writable by manager
+    match /staff/{staffId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['manager']);
+    }
+
+    // Daily summaries - readable by manager
+    match /dailySummary/{date} {
+      allow read: if hasRole(['manager']);
+      allow write: if hasRole(['manager']);
+    }
+
+    // Settings - readable by all authenticated, writable by manager
+    match /settings/{docId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['manager']);
+    }
+  }
+}
