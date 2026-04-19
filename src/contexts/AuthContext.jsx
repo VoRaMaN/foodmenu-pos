@@ -61,10 +61,18 @@ export function AuthProvider({ children }) {
     }
   };
 
+
   const login = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data;
+  };
+
+  // Magic Link (passwordless) sign-in
+  const signInWithMagicLink = async (email) => {
+    const { error } = await supabase.auth.signInWithOtp({ email });
+    if (error) throw error;
+    return true;
   };
 
   const logout = () => supabase.auth.signOut();
@@ -73,7 +81,7 @@ export function AuthProvider({ children }) {
   const hasRole = (...roles) => roles.includes(role);
 
   return (
-    <AuthContext.Provider value={{ user, staffProfile, role, hasRole, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, staffProfile, role, hasRole, login, logout, signInWithMagicLink, loading }}>
       {children}
     </AuthContext.Provider>
   );
