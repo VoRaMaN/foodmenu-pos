@@ -1,9 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
 import { MenuProvider } from './contexts/MenuContext';
-import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
-import Login from './pages/Login';
 import OrderList from './pages/POS/OrderList';
 import NewOrder from './pages/POS/NewOrder';
 import OrderDetail from './pages/POS/OrderDetail';
@@ -20,90 +17,30 @@ import OrderHistory from './pages/Admin/OrderHistory';
 export default function App() {
   return (
     <BrowserRouter basename="/foodmenu-pos">
-      <AuthProvider>
-        <MenuProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }>
-              {/* POS Routes - Cashier, Waiter, Manager */}
-              <Route index element={<Navigate to="/pos" replace />} />
-              <Route path="pos" element={
-                <ProtectedRoute roles={['cashier', 'waiter', 'manager']}>
-                  <OrderList />
-                </ProtectedRoute>
-              } />
-              <Route path="pos/new-order" element={
-                <ProtectedRoute roles={['cashier', 'waiter', 'manager']}>
-                  <NewOrder />
-                </ProtectedRoute>
-              } />
-              <Route path="pos/order/:id" element={
-                <ProtectedRoute roles={['cashier', 'waiter', 'kitchen', 'manager']}>
-                  <OrderDetail />
-                </ProtectedRoute>
-              } />
-              <Route path="pos/payment/:orderId" element={
-                <ProtectedRoute roles={['cashier', 'manager']}>
-                  <Payment />
-                </ProtectedRoute>
-              } />
-
-              {/* Tables */}
-              <Route path="tables" element={
-                <ProtectedRoute roles={['cashier', 'waiter', 'manager']}>
-                  <Tables />
-                </ProtectedRoute>
-              } />
-
-              {/* Kitchen Display */}
-              <Route path="kitchen" element={
-                <ProtectedRoute roles={['kitchen', 'manager']}>
-                  <KDS />
-                </ProtectedRoute>
-              } />
-
-              {/* Admin Routes - Manager only */}
-              <Route path="admin" element={
-                <ProtectedRoute roles={['manager']}>
-                  <Dashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="admin/menu" element={
-                <ProtectedRoute roles={['manager']}>
-                  <MenuManagement />
-                </ProtectedRoute>
-              } />
-              <Route path="admin/orders" element={
-                <ProtectedRoute roles={['manager', 'cashier']}>
-                  <OrderHistory />
-                </ProtectedRoute>
-              } />
-              <Route path="admin/staff" element={
-                <ProtectedRoute roles={['manager']}>
-                  <StaffManagement />
-                </ProtectedRoute>
-              } />
-              <Route path="admin/reports" element={
-                <ProtectedRoute roles={['manager']}>
-                  <Reports />
-                </ProtectedRoute>
-              } />
-              <Route path="admin/settings" element={
-                <ProtectedRoute roles={['manager']}>
-                  <Settings />
-                </ProtectedRoute>
-              } />
-            </Route>
-
-            <Route path="*" element={<Navigate to="/pos" replace />} />
-          </Routes>
-        </MenuProvider>
-      </AuthProvider>
+      <MenuProvider>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            {/* POS Routes - All accessible without login or role checks */}
+            <Route index element={<Navigate to="/pos" replace />} />
+            <Route path="pos" element={<OrderList />} />
+            <Route path="pos/new-order" element={<NewOrder />} />
+            <Route path="pos/order/:id" element={<OrderDetail />} />
+            <Route path="pos/payment/:orderId" element={<Payment />} />
+            {/* Tables */}
+            <Route path="tables" element={<Tables />} />
+            {/* Kitchen Display */}
+            <Route path="kitchen" element={<KDS />} />
+            {/* Admin Routes - All accessible */}
+            <Route path="admin" element={<Dashboard />} />
+            <Route path="admin/menu" element={<MenuManagement />} />
+            <Route path="admin/orders" element={<OrderHistory />} />
+            <Route path="admin/staff" element={<StaffManagement />} />
+            <Route path="admin/reports" element={<Reports />} />
+            <Route path="admin/settings" element={<Settings />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/pos" replace />} />
+        </Routes>
+      </MenuProvider>
     </BrowserRouter>
   );
 }
