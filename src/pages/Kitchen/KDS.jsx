@@ -1,13 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useOrders } from '../../hooks/useOrders';
-import { useAuth } from '../../contexts/AuthContext';
 import { ChefHat, Clock, ArrowRight } from 'lucide-react';
 
 export default function KDS() {
   const { orders, updateOrderStatus } = useOrders({
     statuses: ['sent_to_kitchen', 'preparing', 'ready'],
   });
-  const { user } = useAuth();
   const prevCountRef = useRef(0);
   const audioRef = useRef(null);
 

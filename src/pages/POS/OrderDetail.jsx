@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase';
 import { useOrders } from '../../hooks/useOrders';
-import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, Clock, ChefHat, CheckCircle, XCircle, CreditCard, Printer } from 'lucide-react';
 
 const statusFlow = {
@@ -27,7 +26,6 @@ export default function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { updateOrderStatus } = useOrders();
-  const { user, role } = useAuth();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
 

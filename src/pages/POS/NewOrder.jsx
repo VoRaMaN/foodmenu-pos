@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useMenuContext } from '../../contexts/MenuContext';
 import { useTables } from '../../hooks/useTables';
 import { useOrders } from '../../hooks/useOrders';
-import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../supabase';
 import { Search, Plus, Minus, ShoppingCart, ArrowLeft, Check } from 'lucide-react';
 
@@ -23,7 +22,6 @@ export default function NewOrder() {
   const { items: menuItems, categories } = useMenuContext();
   const { tables } = useTables();
   const { createOrder } = useOrders();
-  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1); // 1=table, 2=menu, 3=review

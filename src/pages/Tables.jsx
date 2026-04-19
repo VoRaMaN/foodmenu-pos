@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useTables } from '../hooks/useTables';
 import { supabase } from '../supabase';
-import { useAuth } from '../contexts/AuthContext';
 
 const statusColors = {
   available: 'bg-green-50 border-green-300 hover:border-green-500',
@@ -17,7 +16,6 @@ const statusDots = {
 
 export default function Tables() {
   const { tables, loading } = useTables();
-  const { hasRole } = useAuth();
   const navigate = useNavigate();
 
   const handleTableClick = (table) => {

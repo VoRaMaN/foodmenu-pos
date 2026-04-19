@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase';
-import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, Banknote, CreditCard, QrCode, CheckCircle, Printer } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import Receipt from '../../components/Receipt';
@@ -9,7 +8,6 @@ import Receipt from '../../components/Receipt';
 export default function Payment() {
   const { orderId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState('cash');
